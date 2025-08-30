@@ -1,0 +1,69 @@
+kafka:
+  brokers:
+    - redpanda:9092
+  clientId: redpanda-console
+  rackId: ""
+  sasl:
+    enabled: false
+    # mechanism: PLAIN
+    # username: ""
+    # password: ""
+  tls:
+    enabled: false
+    # caFilepath: ""
+    # certFilepath: ""
+    # keyFilepath: ""
+    # insecureSkipTlsVerify: false
+  schemaRegistry:
+    enabled: true
+    urls:
+      - http://redpanda:8081
+    username: ""
+    password: ""
+
+redpanda:
+  adminApi:
+    enabled: true
+    urls:
+      - http://redpanda:9644
+    username: ""
+    password: ""
+
+# Authentication
+login:
+  enabled: false
+  # jwtSecret: "your-secret-key"
+  # useSecureCookies: false
+
+# Enterprise features (requires license)
+enterprise:
+  rbac:
+    enabled: false
+
+# Console settings
+console:
+  enabled: true
+  topicDocumentation:
+    enabled: true
+    git:
+      enabled: false
+  messageSearch:
+    enabled: true
+
+# Connect integration (if using Kafka Connect)
+connect:
+  enabled: false
+  clusters: []
+
+# Web server settings
+server:
+  listenPort: 8080
+  gracefulShutdownTimeout: 30s
+  readTimeout: 30s
+  writeTimeout: 30s
+  idleTimeout: 30s
+  compressionLevel: 4
+
+# Logging
+logger:
+  level: info

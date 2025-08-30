@@ -1,0 +1,119 @@
+redpanda:
+  data_directory: /var/lib/redpanda/data
+  empty_seed_starts_cluster: false
+  seed_servers:
+    - host:
+        address: redpanda
+        port: 33145
+  rpc_server:
+    address: 0.0.0.0
+    port: 33145
+  kafka_api:
+    - address: 0.0.0.0
+      port: 9092
+      name: internal
+    - address: 0.0.0.0
+      port: 19092
+      name: external
+  admin:
+    - address: 0.0.0.0
+      port: 9644
+      name: internal
+    - address: 0.0.0.0
+      port: 19644
+      name: external
+  advertised_kafka_api:
+    - address: redpanda
+      port: 9092
+      name: internal
+    - address: localhost
+      port: 19092
+      name: external
+  advertised_rpc_api:
+    address: redpanda
+    port: 33145
+  advertised_pandaproxy_api:
+    - address: redpanda
+      port: 8082
+      name: internal
+    - address: localhost
+      port: 18082
+      name: external
+
+# Performance and resource settings
+rpk:
+  enable_memory_locking: false
+  enable_usage_stats: true
+  overprovisioned: true
+  additional_start_flags:
+    - --reserve-memory=0M
+    - --smp=1
+    - --memory=1G
+    - --default-log-level=info
+
+# Schema Registry
+schema_registry:
+  schema_registry_api:
+    - address: 0.0.0.0
+      port: 8081
+      name: internal
+    - address: 0.0.0.0
+      port: 18081
+      name: external
+  advertised_schema_registry_api:
+    - address: redpanda
+      port: 8081
+      name: internal
+    - address: localhost
+      port: 18081
+      name: external
+
+# Pandaproxy (REST API)
+pandaproxy:
+  pandaproxy_api:
+    - address: 0.0.0.0
+      port: 8082
+      name: internal
+    - address: 0.0.0.0
+      port: 18082
+      name: external
+  advertised_pandaproxy_api:
+    - address: redpanda
+      port: 8082
+      name: internal
+    - address: localhost
+      port: 18082
+      name: external
+  consumer_instance_timeout_ms: 30000
+
+# Cluster settings
+cluster:
+  auto_create_topics_enabled: true
+  default_topic_replications: 1
+  default_topic_partitions: 3
+  enable_leader_balancer: true
+  enable_auto_rebalance_on_node_add: true
+
+# Log settings  
+log_segment_size_min: 1048576
+log_segment_size_max: 1073741824
+log_segment_ms: 604800000
+log_compaction_interval_ms: 300000
+retention_bytes: -1
+retention_ms: 604800000
+
+# Performance tuning
+group_initial_rebalance_delay_ms: 0
+group_new_member_join_timeout_ms: 30000
+fetch_reads_debounce_timeout: 1
+alter_topic_cfg_timeout_ms: 5000
+disable_batch_cache: false
+reclaim_min_size: 134217728
+reclaim_growth_window: 3000
+
+# Security (basic setup - enhance for production)
+enable_sasl: false
+enable_admin_api: true
+
+# Developer mode settings (remove for production)
+developer_mode: true

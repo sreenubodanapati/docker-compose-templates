@@ -1,0 +1,154 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: superset-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    networks:
+      - superset-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: superset-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-superset}
+      POSTGRES_USER: ${POSTGRES_USER:-superset}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-superset}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - superset-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-superset}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  superset:
+    image: apache/superset:3.0.3
+    container_name: superset
+    restart: unless-stopped
+    ports:
+      - "8088:8088"
+    environment:
+      - SUPERSET_CONFIG_PATH=/app/pythonpath/superset_config.py
+      - SUPERSET_SECRET_KEY=${SUPERSET_SECRET_KEY:-your-secret-key-here}
+      - DATABASE_DB=${POSTGRES_DB:-superset}
+      - DATABASE_HOST=postgres
+      - DATABASE_PASSWORD=${POSTGRES_PASSWORD:-superset}
+      - DATABASE_USER=${POSTGRES_USER:-superset}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    volumes:
+      - ./config/superset_config.py:/app/pythonpath/superset_config.py:ro
+      - ./config/requirements.txt:/app/pythonpath/requirements.txt:ro
+      - superset_home:/app/superset_home
+    networks:
+      - superset-network
+    depends_on:
+      - postgres
+      - redis
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8088/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  superset-init:
+    image: apache/superset:3.0.3
+    container_name: superset-init
+    environment:
+      - SUPERSET_CONFIG_PATH=/app/pythonpath/superset_config.py
+      - SUPERSET_SECRET_KEY=${SUPERSET_SECRET_KEY:-your-secret-key-here}
+      - DATABASE_DB=${POSTGRES_DB:-superset}
+      - DATABASE_HOST=postgres
+      - DATABASE_PASSWORD=${POSTGRES_PASSWORD:-superset}
+      - DATABASE_USER=${POSTGRES_USER:-superset}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    volumes:
+      - ./config/superset_config.py:/app/pythonpath/superset_config.py:ro
+      - ./init-scripts:/app/init-scripts:ro
+    networks:
+      - superset-network
+    depends_on:
+      - postgres
+      - redis
+    command: |
+      sh -c "
+      pip install -r /app/pythonpath/requirements.txt &&
+      superset fab create-admin --username admin --firstname Admin --lastname User --email admin@superset.com --password admin &&
+      superset db upgrade &&
+      superset init &&
+      /app/init-scripts/load_examples.sh
+      "
+    profiles:
+      - init
+
+  # Example database for dashboards
+  example-mysql:
+    image: mysql:8.0
+    container_name: superset-mysql-example
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-examples}
+      MYSQL_USER: ${MYSQL_USER:-examples}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-examples}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./examples/mysql-init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - superset-network
+    profiles:
+      - examples
+
+  # Worker for async queries
+  superset-worker:
+    image: apache/superset:3.0.3
+    container_name: superset-worker
+    restart: unless-stopped
+    environment:
+      - SUPERSET_CONFIG_PATH=/app/pythonpath/superset_config.py
+      - SUPERSET_SECRET_KEY=${SUPERSET_SECRET_KEY:-your-secret-key-here}
+      - DATABASE_DB=${POSTGRES_DB:-superset}
+      - DATABASE_HOST=postgres
+      - DATABASE_PASSWORD=${POSTGRES_PASSWORD:-superset}
+      - DATABASE_USER=${POSTGRES_USER:-superset}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    volumes:
+      - ./config/superset_config.py:/app/pythonpath/superset_config.py:ro
+      - superset_home:/app/superset_home
+    networks:
+      - superset-network
+    depends_on:
+      - postgres
+      - redis
+    command: celery --app=superset.tasks.celery_app:app worker --pool=prefork -O fair -c 4
+    profiles:
+      - worker
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  superset_home:
+    driver: local
+  mysql_data:
+    driver: local
+
+networks:
+  superset-network:
+    driver: bridge

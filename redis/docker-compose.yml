@@ -1,0 +1,99 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7.2-alpine
+    container_name: redis-${ENVIRONMENT:-prod}
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+      - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
+      - /etc/localtime:/etc/localtime:ro
+    command: >
+      redis-server /usr/local/etc/redis/redis.conf
+      --requirepass "${REDIS_PASSWORD:-$(cat /run/secrets/redis_password 2>/dev/null || echo '')}"
+    secrets:
+      - redis_password
+    healthcheck:
+      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "${REDIS_PASSWORD:-$(cat /run/secrets/redis_password 2>/dev/null || echo '')}", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    environment:
+      - TZ=${TIMEZONE:-UTC}
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 128M
+          cpus: '0.25'
+    security_opt:
+      - no-new-privileges:true
+    user: "999:999"  # redis user
+    sysctls:
+      net.core.somaxconn: 1024
+      vm.overcommit_memory: 1
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - redis_network
+
+  redis-sentinel:
+    image: redis:7.2-alpine
+    container_name: redis-sentinel-${ENVIRONMENT:-prod}
+    restart: unless-stopped
+    ports:
+      - "${REDIS_SENTINEL_PORT:-26379}:26379"
+    volumes:
+      - ./sentinel.conf:/usr/local/etc/redis/sentinel.conf:ro
+      - sentinel_data:/data
+      - /etc/localtime:/etc/localtime:ro
+    command: redis-sentinel /usr/local/etc/redis/sentinel.conf
+    depends_on:
+      - redis
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.5'
+        reservations:
+          memory: 64M
+          cpus: '0.1'
+    security_opt:
+      - no-new-privileges:true
+    user: "999:999"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "3"
+    networks:
+      - redis_network
+    profiles:
+      - sentinel
+
+secrets:
+  redis_password:
+    file: ./secrets/redis_password.txt
+
+volumes:
+  redis_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${REDIS_DATA_PATH:-./data/redis}
+  sentinel_data:
+    driver: local
+
+networks:
+  redis_network:
+    driver: bridge

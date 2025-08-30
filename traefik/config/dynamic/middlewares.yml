@@ -1,0 +1,49 @@
+http:
+  middlewares:
+    auth:
+      basicAuth:
+        users:
+          - "admin:$2y$10$DjAO1mTtR6srWRs/VIzJhOwvYwVJcYk8fMnwX.7bG/Q3U8yP.kC4u" # admin:password
+
+    secure-headers:
+      headers:
+        accessControlAllowMethods:
+          - GET
+          - OPTIONS
+          - PUT
+        accessControlMaxAge: 100
+        hostsProxyHeaders:
+          - "X-Forwarded-Host"
+        referrerPolicy: "same-origin"
+        sslRedirect: true
+        sslHost: "example.com"
+        sslForceHost: true
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        forceSTSHeader: true
+        frameDeny: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        customFrameOptionsValue: "SAMEORIGIN"
+
+  routers:
+    api:
+      rule: "Host(`traefik.localhost`)"
+      service: "api@internal"
+      middlewares:
+        - "auth"
+        - "secure-headers"
+      tls:
+        certResolver: "letsencrypt"
+
+tls:
+  options:
+    default:
+      sslProtocols:
+        - "TLSv1.2"
+        - "TLSv1.3"
+      cipherSuites:
+        - "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
+        - "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305"
+        - "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
