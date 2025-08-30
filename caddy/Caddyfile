@@ -1,0 +1,105 @@
+# Global options
+{
+    admin 0.0.0.0:2019
+    email {$ACME_EMAIL}
+    
+    # Automatic HTTPS settings
+    auto_https on
+    
+    # Security headers
+    servers {
+        protocols h1 h2 h3
+    }
+}
+
+# Default site (catch-all)
+localhost {
+    root * /srv
+    file_server
+    
+    # Security headers
+    header {
+        # Security
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        
+        # Remove server info
+        -Server
+    }
+    
+    # Logging
+    log {
+        output file /var/log/caddy/access.log {
+            roll_size 100mb
+            roll_keep 10
+        }
+        format json
+    }
+}
+
+# Example API proxy
+api.localhost {
+    reverse_proxy backend-app:80
+    
+    # CORS handling
+    @cors_preflight method OPTIONS
+    handle @cors_preflight {
+        header Access-Control-Allow-Origin "*"
+        header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        header Access-Control-Allow-Headers "Content-Type, Authorization"
+        respond "" 204
+    }
+    
+    header Access-Control-Allow-Origin "*"
+    
+    # Rate limiting
+    rate_limit {
+        zone api_zone
+        key {remote_host}
+        events 100
+        window 1m
+    }
+    
+    log {
+        output file /var/log/caddy/api.log
+        format json
+    }
+}
+
+# Example app with authentication
+app.localhost {
+    reverse_proxy api-service:80
+    
+    # Basic authentication
+    basicauth {
+        admin $2a$14$example_hash
+    }
+    
+    # Request/response transformation
+    header_up Host {http.reverse_proxy.upstream.hostport}
+    header_up X-Real-IP {remote_host}
+    header_up X-Forwarded-For {remote_host}
+    header_up X-Forwarded-Proto {scheme}
+}
+
+# Admin interface
+admin.localhost {
+    reverse_proxy localhost:2019
+    
+    # IP whitelist for admin access
+    @allowed remote_ip 127.0.0.1 192.168.0.0/16
+    handle @allowed {
+        reverse_proxy localhost:2019
+    }
+    
+    respond "Access Denied" 403
+}
+
+# Health check endpoint
+health.localhost {
+    respond /health "OK" 200
+    respond "Not Found" 404
+}

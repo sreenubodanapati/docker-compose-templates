@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  caddy:
+    image: caddy:2.7-alpine
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"  # HTTP/3
+      - "2019:2019"    # Admin API
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./config:/etc/caddy/config:ro
+      - ./html:/srv:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      - CADDY_ADMIN=${CADDY_ADMIN:-0.0.0.0:2019}
+      - ACME_EMAIL=${ACME_EMAIL:-admin@example.com}
+    networks:
+      - caddy-network
+      - web
+    healthcheck:
+      test: ["CMD", "caddy", "validate", "--config", "/etc/caddy/Caddyfile"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Example backend service
+  backend-app:
+    image: nginx:alpine
+    container_name: backend-app
+    restart: unless-stopped
+    volumes:
+      - ./html:/usr/share/nginx/html:ro
+    networks:
+      - caddy-network
+    profiles:
+      - demo
+
+  # Example API service
+  api-service:
+    image: httpd:alpine
+    container_name: api-service
+    restart: unless-stopped
+    networks:
+      - caddy-network
+    profiles:
+      - demo
+
+volumes:
+  caddy_data:
+    driver: local
+  caddy_config:
+    driver: local
+
+networks:
+  caddy-network:
+    driver: bridge
+  web:
+    external: true
+    name: web

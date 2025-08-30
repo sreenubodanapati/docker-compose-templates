@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<restrict>
+  <remote>
+    <host>localhost</host>
+    <host>127.0.0.1</host>
+    <host>[::1]</host>
+  </remote>
+  <cors>
+    <allow-origin>*</allow-origin>
+    <allow-methods>GET,POST,PUT,DELETE,OPTIONS</allow-methods>
+    <allow-headers>origin,content-type,accept,authorization</allow-headers>
+    <max-age>86400</max-age>
+  </cors>
+</restrict>
