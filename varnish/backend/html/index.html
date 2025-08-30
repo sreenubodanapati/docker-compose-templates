@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Varnish Cache Demo</title>
+    <meta charset="utf-8">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background: #f0f0f0; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .header { text-align: center; color: #333; margin-bottom: 30px; }
+        .info { background: #e8f4f8; padding: 20px; border-radius: 5px; margin: 20px 0; }
+        .performance { background: #f0f8e8; padding: 15px; margin: 10px 0; border-radius: 5px; }
+        .cache-status { background: #fff3cd; padding: 10px; border-radius: 3px; margin: 10px 0; }
+        .code { background: #f8f8f8; padding: 10px; border-radius: 3px; font-family: monospace; overflow-x: auto; }
+    </style>
+    <script>
+        function checkCacheStatus() {
+            fetch('/', { method: 'HEAD' })
+                .then(response => {
+                    const cacheStatus = response.headers.get('X-Cache') || 'UNKNOWN';
+                    const cacheHits = response.headers.get('X-Cache-Hits') || '0';
+                    document.getElementById('cache-status').innerHTML = 
+                        `<strong>Cache Status:</strong> ${cacheStatus} | <strong>Hits:</strong> ${cacheHits}`;
+                });
+        }
+        
+        // Check cache status every 5 seconds
+        setInterval(checkCacheStatus, 5000);
+        window.onload = checkCacheStatus;
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1 class="header">🚀 Varnish Cache Performance Demo</h1>
+        
+        <div class="cache-status" id="cache-status">
+            <strong>Cache Status:</strong> Loading...
+        </div>
+        
+        <div class="info">
+            <h2>🎯 Performance Benefits</h2>
+            <div class="performance">
+                <strong>⚡ Speed:</strong> 300x faster than backend for cached content
+            </div>
+            <div class="performance">
+                <strong>📈 Scalability:</strong> Handle 10,000+ requests per second
+            </div>
+            <div class="performance">
+                <strong>💾 Efficiency:</strong> Reduced backend load by 90%+
+            </div>
+        </div>
+        
+        <div class="info">
+            <h2>🔧 Cache Configuration</h2>
+            <ul>
+                <li><strong>Static Assets:</strong> 1 hour TTL</li>
+                <li><strong>HTML Pages:</strong> 5 minutes TTL</li>
+                <li><strong>API Responses:</strong> Custom TTL based on headers</li>
+                <li><strong>Error Pages:</strong> No caching</li>
+            </ul>
+        </div>
+        
+        <div class="info">
+            <h2>📊 Test Commands</h2>
+            
+            <h3>Cache Hit Test</h3>
+            <div class="code">
+# First request (cache miss)
+curl -I http://localhost/
+
+# Second request (cache hit)  
+curl -I http://localhost/
+            </div>
+            
+            <h3>Cache Purge</h3>
+            <div class="code">
+curl -X PURGE http://localhost/
+            </div>
+            
+            <h3>Statistics</h3>
+            <div class="code">
+echo "stats" | nc localhost 6082
+            </div>
+        </div>
+        
+        <div class="info">
+            <h2>🌐 Access Points</h2>
+            <ul>
+                <li><strong>Cached Site:</strong> <a href="http://localhost">http://localhost</a></li>
+                <li><strong>Backend Direct:</strong> <a href="http://localhost:8080">http://localhost:8080</a></li>
+                <li><strong>Admin Interface:</strong> telnet localhost 6082</li>
+            </ul>
+        </div>
+        
+        <div class="info">
+            <p><em>Page loaded at: <span id="timestamp"></span></em></p>
+            <script>
+                document.getElementById('timestamp').textContent = new Date().toLocaleString();
+            </script>
+        </div>
+    </div>
+</body>
+</html>

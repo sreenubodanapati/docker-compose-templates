@@ -1,0 +1,83 @@
+version: '3.8'
+
+services:
+  varnish:
+    image: varnish:7.4
+    container_name: varnish
+    restart: unless-stopped
+    ports:
+      - "80:80"     # HTTP cache port
+      - "6082:6082" # Admin port
+    volumes:
+      - ./config/default.vcl:/etc/varnish/default.vcl:ro
+      - ./config/varnish.params:/etc/varnish/varnish.params:ro
+    environment:
+      - VARNISH_SIZE=${VARNISH_SIZE:-128M}
+      - VARNISH_TTL=${VARNISH_TTL:-120}
+      - BACKEND_HOST=${BACKEND_HOST:-backend}
+      - BACKEND_PORT=${BACKEND_PORT:-80}
+    networks:
+      - varnish-network
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "varnishstat -1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Backend web server
+  backend:
+    image: nginx:alpine
+    container_name: varnish-backend
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./backend/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./backend/html:/usr/share/nginx/html:ro
+    networks:
+      - varnish-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:80/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Varnish Exporter for Prometheus
+  varnish-exporter:
+    image: jonnenauha/prometheus_varnish_exporter:1.6
+    container_name: varnish-exporter
+    restart: unless-stopped
+    ports:
+      - "9131:9131"
+    environment:
+      - VARNISH_URI=http://varnish:6082
+    networks:
+      - varnish-network
+    depends_on:
+      - varnish
+    profiles:
+      - monitoring
+
+  # Alternative backend - API service
+  api-backend:
+    image: httpd:alpine
+    container_name: api-backend
+    restart: unless-stopped
+    ports:
+      - "8081:80"
+    volumes:
+      - ./api-backend:/usr/local/apache2/htdocs:ro
+    networks:
+      - varnish-network
+    profiles:
+      - api
+
+volumes:
+  varnish_storage:
+    driver: local
+
+networks:
+  varnish-network:
+    driver: bridge
