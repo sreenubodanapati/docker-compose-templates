@@ -1,0 +1,133 @@
+version: '3.8'
+
+services:
+  mariadb-primary:
+    image: mariadb:11.2
+    container_name: mariadb-primary
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/mysql_root_password
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-appdb}
+      MYSQL_USER_FILE: /run/secrets/mysql_user
+      MYSQL_PASSWORD_FILE: /run/secrets/mysql_password
+      MYSQL_REPLICATION_MODE: master
+      MYSQL_REPLICATION_USER: replication
+      MYSQL_REPLICATION_PASSWORD_FILE: /run/secrets/mysql_replication_password
+    volumes:
+      - mariadb_primary_data:/var/lib/mysql
+      - ./config/my.cnf:/etc/mysql/conf.d/custom.cnf:ro
+      - ./init-scripts:/docker-entrypoint-initdb.d:ro
+    networks:
+      - mariadb_network
+    secrets:
+      - mysql_root_password
+      - mysql_user
+      - mysql_password
+      - mysql_replication_password
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  mariadb-replica:
+    image: mariadb:11.2
+    container_name: mariadb-replica
+    restart: unless-stopped
+    ports:
+      - "3307:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/mysql_root_password
+      MYSQL_REPLICATION_MODE: slave
+      MYSQL_MASTER_HOST: mariadb-primary
+      MYSQL_MASTER_PORT_NUMBER: 3306
+      MYSQL_REPLICATION_USER: replication
+      MYSQL_REPLICATION_PASSWORD_FILE: /run/secrets/mysql_replication_password
+    volumes:
+      - mariadb_replica_data:/var/lib/mysql
+      - ./config/my.cnf:/etc/mysql/conf.d/custom.cnf:ro
+    networks:
+      - mariadb_network
+    secrets:
+      - mysql_root_password
+      - mysql_replication_password
+    depends_on:
+      mariadb-primary:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin:5.2
+    container_name: phpmyadmin
+    restart: unless-stopped
+    ports:
+      - "8082:80"
+    environment:
+      PMA_HOST: mariadb-primary
+      PMA_PORT: 3306
+      PMA_USER: root
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/mysql_root_password
+      PMA_ARBITRARY: 1
+    networks:
+      - mariadb_network
+    secrets:
+      - mysql_root_password
+    depends_on:
+      mariadb-primary:
+        condition: service_healthy
+
+  mariadb-backup:
+    image: mariadb:11.2
+    container_name: mariadb-backup
+    restart: "no"
+    environment:
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/mysql_root_password
+    volumes:
+      - mariadb_backups:/backups
+      - ./scripts/backup.sh:/backup.sh:ro
+    networks:
+      - mariadb_network
+    secrets:
+      - mysql_root_password
+    depends_on:
+      mariadb-primary:
+        condition: service_healthy
+    command: |
+      sh -c "
+        while true; do
+          echo 'Starting backup at $$(date)'
+          /backup.sh
+          echo 'Backup completed at $$(date)'
+          sleep 86400
+        done
+      "
+
+volumes:
+  mariadb_primary_data:
+    driver: local
+  mariadb_replica_data:
+    driver: local
+  mariadb_backups:
+    driver: local
+
+networks:
+  mariadb_network:
+    driver: bridge
+
+secrets:
+  mysql_root_password:
+    file: ./secrets/mysql_root_password.txt
+  mysql_user:
+    file: ./secrets/mysql_user.txt
+  mysql_password:
+    file: ./secrets/mysql_password.txt
+  mysql_replication_password:
+    file: ./secrets/mysql_replication_password.txt

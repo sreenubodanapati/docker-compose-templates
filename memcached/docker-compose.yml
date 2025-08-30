@@ -1,0 +1,100 @@
+version: '3.8'
+
+services:
+  memcached:
+    image: memcached:1.6-alpine
+    container_name: memcached
+    restart: unless-stopped
+    ports:
+      - "11211:11211"
+    command: |
+      memcached
+      -m ${MEMCACHED_MEMORY:-64}
+      -p 11211
+      -u memcache
+      -l 0.0.0.0
+      -P /tmp/memcached.pid
+      -v
+    environment:
+      - MEMCACHED_MEMORY=${MEMCACHED_MEMORY:-64}
+      - MEMCACHED_MAX_CONNECTIONS=${MEMCACHED_MAX_CONNECTIONS:-1024}
+    networks:
+      - memcached-network
+    healthcheck:
+      test: ["CMD-SHELL", "echo 'stats' | nc localhost 11211 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Memcached Exporter for Prometheus monitoring
+  memcached-exporter:
+    image: prom/memcached-exporter:v0.10.0
+    container_name: memcached-exporter
+    restart: unless-stopped
+    ports:
+      - "9150:9150"
+    environment:
+      - MEMCACHED_ADDRESS=memcached:11211
+    networks:
+      - memcached-network
+    depends_on:
+      - memcached
+    profiles:
+      - monitoring
+
+  # Example web application using Memcached
+  web-app:
+    image: nginx:alpine
+    container_name: memcached-demo
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./demo-app:/usr/share/nginx/html:ro
+    networks:
+      - memcached-network
+    profiles:
+      - demo
+
+  # PHP-FPM example for Memcached usage
+  php-app:
+    image: php:8.2-fpm-alpine
+    container_name: php-memcached
+    restart: unless-stopped
+    volumes:
+      - ./php-app:/var/www/html:ro
+    networks:
+      - memcached-network
+    profiles:
+      - php
+    command: |
+      sh -c "
+      apk add --no-cache libmemcached-dev zlib-dev &&
+      docker-php-ext-install pdo pdo_mysql &&
+      pecl install memcached &&
+      docker-php-ext-enable memcached &&
+      php-fpm
+      "
+
+  # Redis alternative for comparison
+  redis:
+    image: redis:7-alpine
+    container_name: redis-alt
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - memcached-network
+    profiles:
+      - redis
+    command: redis-server --appendonly yes
+
+volumes:
+  redis_data:
+    driver: local
+
+networks:
+  memcached-network:
+    driver: bridge

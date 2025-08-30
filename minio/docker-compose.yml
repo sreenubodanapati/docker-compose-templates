@@ -1,0 +1,128 @@
+version: '3.8'
+
+services:
+  minio1:
+    image: quay.io/minio/minio:RELEASE.2024-01-16T16-07-38Z
+    container_name: minio1
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER_FILE: /run/secrets/minio_root_user
+      MINIO_ROOT_PASSWORD_FILE: /run/secrets/minio_root_password
+      MINIO_VOLUMES: "/data1 /data2 /data3 /data4"
+      MINIO_OPTS: "--console-address :9001"
+    volumes:
+      - minio_data1:/data1
+      - minio_data2:/data2
+      - minio_data3:/data3
+      - minio_data4:/data4
+      - ./config:/etc/minio:ro
+    networks:
+      - minio_network
+    secrets:
+      - minio_root_user
+      - minio_root_password
+    command: server --console-address ":9001" /data{1...4}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+      start_period: 60s
+
+  minio2:
+    image: quay.io/minio/minio:RELEASE.2024-01-16T16-07-38Z
+    container_name: minio2
+    restart: unless-stopped
+    ports:
+      - "9002:9000"
+      - "9003:9001"
+    environment:
+      MINIO_ROOT_USER_FILE: /run/secrets/minio_root_user
+      MINIO_ROOT_PASSWORD_FILE: /run/secrets/minio_root_password
+      MINIO_VOLUMES: "/data1 /data2 /data3 /data4"
+      MINIO_OPTS: "--console-address :9001"
+    volumes:
+      - minio2_data1:/data1
+      - minio2_data2:/data2
+      - minio2_data3:/data3
+      - minio2_data4:/data4
+      - ./config:/etc/minio:ro
+    networks:
+      - minio_network
+    secrets:
+      - minio_root_user
+      - minio_root_password
+    command: server --console-address ":9001" /data{1...4}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+      start_period: 60s
+
+  nginx-loadbalancer:
+    image: nginx:alpine
+    container_name: minio-nginx
+    restart: unless-stopped
+    ports:
+      - "9090:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - minio_network
+    depends_on:
+      - minio1
+      - minio2
+
+  minio-mc:
+    image: quay.io/minio/mc:RELEASE.2024-01-13T08-44-48Z
+    container_name: minio-mc
+    restart: "no"
+    environment:
+      MC_HOST_minio: http://$(cat /run/secrets/minio_root_user):$(cat /run/secrets/minio_root_password)@minio1:9000
+    volumes:
+      - ./scripts/setup-buckets.sh:/setup-buckets.sh:ro
+    networks:
+      - minio_network
+    secrets:
+      - minio_root_user
+      - minio_root_password
+    depends_on:
+      minio1:
+        condition: service_healthy
+    entrypoint: |
+      sh -c "
+        /setup-buckets.sh
+        tail -f /dev/null
+      "
+
+volumes:
+  minio_data1:
+    driver: local
+  minio_data2:
+    driver: local
+  minio_data3:
+    driver: local
+  minio_data4:
+    driver: local
+  minio2_data1:
+    driver: local
+  minio2_data2:
+    driver: local
+  minio2_data3:
+    driver: local
+  minio2_data4:
+    driver: local
+
+networks:
+  minio_network:
+    driver: bridge
+
+secrets:
+  minio_root_user:
+    file: ./secrets/minio_root_user.txt
+  minio_root_password:
+    file: ./secrets/minio_root_password.txt

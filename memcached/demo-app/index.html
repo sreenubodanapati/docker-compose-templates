@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Memcached Caching Demo</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; }
+        .header { text-align: center; color: #333; }
+        .info { background: #e8f4f8; padding: 20px; border-radius: 5px; margin: 20px 0; }
+        .command { background: #f8f8f8; padding: 10px; border-radius: 3px; font-family: monospace; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="header">🗄️ Memcached High-Performance Caching</h1>
+        
+        <div class="info">
+            <h2>Connection Details</h2>
+            <p><strong>Host:</strong> localhost</p>
+            <p><strong>Port:</strong> 11211</p>
+            <p><strong>Protocol:</strong> Memcached binary/text protocol</p>
+        </div>
+        
+        <div class="info">
+            <h2>Test Connection</h2>
+            <div class="command">
+                telnet localhost 11211<br>
+                stats<br>
+                quit
+            </div>
+        </div>
+        
+        <div class="info">
+            <h2>Usage Examples</h2>
+            
+            <h3>PHP</h3>
+            <div class="command">
+$memcached = new Memcached();<br>
+$memcached->addServer('memcached', 11211);<br>
+$memcached->set('key', 'value', 3600);
+            </div>
+            
+            <h3>Python</h3>
+            <div class="command">
+import memcache<br>
+mc = memcache.Client(['memcached:11211'])<br>
+mc.set('key', 'value', time=3600)
+            </div>
+            
+            <h3>Node.js</h3>
+            <div class="command">
+const memjs = require('memjs');<br>
+const client = memjs.Client.create('memcached:11211');<br>
+client.set('key', 'value', {expires: 3600});
+            </div>
+        </div>
+        
+        <div class="info">
+            <h2>Features</h2>
+            <ul>
+                <li>✅ High-performance in-memory caching</li>
+                <li>✅ Simple key-value storage</li>
+                <li>✅ Distributed caching support</li>
+                <li>✅ Prometheus monitoring (with profile)</li>
+                <li>✅ Language agnostic</li>
+                <li>✅ LRU eviction policy</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>

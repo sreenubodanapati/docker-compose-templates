@@ -1,0 +1,108 @@
+version: '3.8'
+
+services:
+  nats:
+    image: nats:2.10-alpine
+    container_name: nats-server
+    hostname: nats
+    restart: unless-stopped
+    command:
+      - "--config"
+      - "/etc/nats/nats.conf"
+    ports:
+      - "4222:4222"     # NATS port
+      - "8222:8222"     # HTTP monitoring port
+      - "6222:6222"     # Routing port for clustering
+    volumes:
+      - ./config/nats.conf:/etc/nats/nats.conf:ro
+      - ./secrets:/etc/nats/secrets:ro
+      - nats_jetstream:/data/jetstream
+    networks:
+      - nats_network
+    healthcheck:
+      test: ["CMD", "nats", "server", "check", "--server", "nats://localhost:4222"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.nats-monitoring.rule=Host(`nats.localhost`)"
+      - "traefik.http.services.nats-monitoring.loadbalancer.server.port=8222"
+
+  nats-box:
+    image: natsio/nats-box:0.14.1
+    container_name: nats-box
+    hostname: nats-box
+    restart: unless-stopped
+    profiles:
+      - tools
+    depends_on:
+      - nats
+    networks:
+      - nats_network
+    volumes:
+      - ./config:/config:ro
+      - ./secrets:/secrets:ro
+    command: 
+      - /bin/sh
+      - -c
+      - |
+        echo "NATS Box ready. Available tools:"
+        echo "- nats: NATS CLI"
+        echo "- nsc: NATS Security CLI"  
+        echo "- nk: NATS benchmarking"
+        echo ""
+        echo "Connect to NATS: nats sub --server nats://nats:4222 'test.subject'"
+        tail -f /dev/null
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.1'
+
+  nats-surveyor:
+    image: natsio/nats-surveyor:0.5.4
+    container_name: nats-surveyor
+    hostname: nats-surveyor
+    restart: unless-stopped
+    profiles:
+      - monitoring
+    depends_on:
+      - nats
+    ports:
+      - "7777:7777"     # Surveyor web interface
+    environment:
+      NATS_SURVEYOR_SERVERS: nats://nats:4222
+    networks:
+      - nats_network
+    command:
+      - "--server"
+      - "nats://nats:4222"
+      - "--http-port"
+      - "7777"
+      - "--count"
+      - "1000"
+      - "--observe"
+      - "advisories,connz,routez,subsz,varz,gatewayz,leafz"
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.2'
+
+volumes:
+  nats_jetstream:
+    driver: local
+
+networks:
+  nats_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.22.0.0/24

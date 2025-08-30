@@ -1,0 +1,18 @@
+version: '3.8'
+
+# Development overrides - use with: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  nginx:
+    environment:
+      - ENVIRONMENT=dev
+    ports:
+      - "8080:80"
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+    security_opt: []  # Disable security restrictions for dev
+    read_only: false
+    user: root
