@@ -1,0 +1,22 @@
+filebeat.inputs:
+- type: container
+  paths:
+    - '/var/lib/docker/containers/*/*.log'
+  processors:
+    - add_docker_metadata:
+        host: "unix:///var/run/docker.sock"
+
+- type: log
+  paths:
+    - /var/log/*.log
+    - /var/log/syslog
+  fields:
+    logtype: system
+  fields_under_root: true
+
+output.logstash:
+  hosts: ["logstash:5044"]
+
+processors:
+  - add_host_metadata:
+      when.not.contains.tags: forwarded

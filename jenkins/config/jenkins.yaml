@@ -1,0 +1,75 @@
+jenkins:
+  systemMessage: "Jenkins configured as code"
+  
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "${JENKINS_ADMIN_ID}"
+          password: "${JENKINS_ADMIN_PASSWORD}"
+          properties:
+            - "hudson.tasks.Mailer$UserProperty":
+                emailAddress: "admin@example.com"
+
+  authorizationStrategy:
+    globalMatrix:
+      permissions:
+        - "Overall/Administer:admin"
+        - "Overall/Read:authenticated"
+
+  remotingSecurity:
+    enabled: true
+
+  nodes:
+    - permanent:
+        name: "docker-agent"
+        remoteFS: "/home/jenkins/agent"
+        launcher:
+          inbound:
+            webSocket: true
+
+tool:
+  git:
+    installations:
+      - name: "Default"
+        home: "git"
+
+  maven:
+    installations:
+      - name: "Maven 3.9.5"
+        properties:
+          - installSource:
+              installers:
+                - maven:
+                    id: "3.9.5"
+
+  jdk:
+    installations:
+      - name: "OpenJDK 17"
+        properties:
+          - installSource:
+              installers:
+                - adoptOpenJdkInstaller:
+                    id: "jdk-17.0.8.1+1"
+
+unclassified:
+  location:
+    adminAddress: "admin@example.com"
+    url: "http://localhost:8080"
+
+  mailer:
+    defaultSuffix: "@example.com"
+    smtpHost: "smtp.example.com"
+    smtpPort: 587
+    useSsl: true
+    charset: "UTF-8"
+
+  globalLibraries:
+    libraries:
+      - name: "shared-library"
+        defaultVersion: "main"
+        retriever:
+          modernSCM:
+            scm:
+              git:
+                remote: "https://github.com/your-org/jenkins-shared-library.git"

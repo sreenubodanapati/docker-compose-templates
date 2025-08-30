@@ -1,0 +1,110 @@
+version: '3.8'
+
+services:
+  jenkins:
+    image: jenkins/jenkins:2.426.1-lts
+    container_name: jenkins
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./config/jenkins.yaml:/var/jenkins_home/casc_configs/jenkins.yaml:ro
+      - ./init-scripts:/usr/share/jenkins/ref/init.groovy.d:ro
+    environment:
+      - JENKINS_OPTS=${JENKINS_OPTS:--Dhudson.footerURL=http://localhost:8080}
+      - JAVA_OPTS=${JAVA_OPTS:--Xmx2048m -Dhudson.footerURL=http://localhost:8080}
+      - CASC_JENKINS_CONFIG=/var/jenkins_home/casc_configs/jenkins.yaml
+      - JENKINS_ADMIN_ID=${JENKINS_ADMIN_USER:-admin}
+      - JENKINS_ADMIN_PASSWORD_FILE=/run/secrets/jenkins_admin_password
+    secrets:
+      - jenkins_admin_password
+    networks:
+      - jenkins-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/login || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
+  jenkins-agent:
+    image: jenkins/inbound-agent:latest
+    container_name: jenkins-agent
+    restart: unless-stopped
+    environment:
+      - JENKINS_URL=http://jenkins:8080
+      - JENKINS_SECRET=${JENKINS_AGENT_SECRET}
+      - JENKINS_AGENT_NAME=${JENKINS_AGENT_NAME:-docker-agent}
+      - JENKINS_AGENT_WORKDIR=/home/jenkins/agent
+    volumes:
+      - jenkins_agent_workdir:/home/jenkins/agent
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - jenkins-network
+    depends_on:
+      - jenkins
+    profiles:
+      - agent
+
+  # Docker-in-Docker for Jenkins agents
+  jenkins-docker:
+    image: docker:dind
+    container_name: jenkins-docker
+    restart: unless-stopped
+    privileged: true
+    environment:
+      - DOCKER_TLS_CERTDIR=/certs
+    volumes:
+      - jenkins_docker_certs:/certs/client
+      - jenkins_home:/var/jenkins_home
+    networks:
+      - jenkins-network
+    command: --storage-driver overlay2
+    profiles:
+      - dind
+
+  # PostgreSQL for advanced Jenkins configurations
+  postgres:
+    image: postgres:15-alpine
+    container_name: jenkins-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-jenkins}
+      - POSTGRES_USER=${POSTGRES_USER:-jenkins}
+      - POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - jenkins-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-jenkins}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    profiles:
+      - postgres
+
+secrets:
+  jenkins_admin_password:
+    file: ./secrets/jenkins_admin_password.txt
+  postgres_password:
+    file: ./secrets/postgres_password.txt
+
+volumes:
+  jenkins_home:
+    driver: local
+  jenkins_agent_workdir:
+    driver: local
+  jenkins_docker_certs:
+    driver: local
+  postgres_data:
+    driver: local
+
+networks:
+  jenkins-network:
+    driver: bridge

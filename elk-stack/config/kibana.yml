@@ -1,0 +1,13 @@
+server.name: kibana
+server.host: 0.0.0.0
+server.port: 5601
+
+elasticsearch.hosts: ["http://elasticsearch:9200"]
+elasticsearch.username: "elastic"
+elasticsearch.password: "${ELASTICSEARCH_PASSWORD}"
+
+logging.appenders.file.type: file
+logging.appenders.file.fileName: /usr/share/kibana/logs/kibana.log
+logging.appenders.file.layout.type: json
+
+logging.root.level: info

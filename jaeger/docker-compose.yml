@@ -1,0 +1,119 @@
+version: '3.8'
+
+services:
+  jaeger-all-in-one:
+    image: jaegertracing/all-in-one:1.51
+    container_name: jaeger
+    restart: unless-stopped
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "14268:14268"  # Accept jaeger.thrift directly from clients
+      - "14250:14250"  # Accept model.proto
+      - "6831:6831/udp"  # Accept jaeger.thrift in compact Thrift protocol
+      - "6832:6832/udp"  # Accept jaeger.thrift in binary Thrift protocol
+      - "5778:5778"   # Config API
+      - "5775:5775/udp"  # Accept zipkin.thrift
+      - "9411:9411"   # Zipkin compatible endpoint
+    environment:
+      - COLLECTOR_ZIPKIN_HOST_PORT=:9411
+      - COLLECTOR_OTLP_ENABLED=true
+      - SPAN_STORAGE_TYPE=${JAEGER_STORAGE_TYPE:-memory}
+      - MEMORY_MAX_TRACES=${JAEGER_MEMORY_MAX_TRACES:-50000}
+    networks:
+      - jaeger-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:16686/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Alternative: Jaeger with Elasticsearch backend
+  jaeger-elasticsearch:
+    image: jaegertracing/all-in-one:1.51
+    container_name: jaeger-elasticsearch
+    restart: unless-stopped
+    ports:
+      - "16687:16686"  # Alternative UI port
+    environment:
+      - SPAN_STORAGE_TYPE=elasticsearch
+      - ES_SERVER_URLS=http://elasticsearch:9200
+      - ES_USERNAME=elastic
+      - ES_PASSWORD_FILE=/run/secrets/elastic_password
+      - COLLECTOR_ZIPKIN_HOST_PORT=:9411
+      - COLLECTOR_OTLP_ENABLED=true
+    secrets:
+      - elastic_password
+    networks:
+      - jaeger-network
+    depends_on:
+      - elasticsearch
+    profiles:
+      - elasticsearch
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:16686/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: jaeger-elasticsearch
+    restart: unless-stopped
+    ports:
+      - "9201:9200"
+    environment:
+      - node.name=jaeger-elasticsearch
+      - cluster.name=jaeger-cluster
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - xpack.security.enabled=true
+      - ELASTIC_PASSWORD_FILE=/run/secrets/elastic_password
+    secrets:
+      - elastic_password
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - jaeger_elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - jaeger-network
+    profiles:
+      - elasticsearch
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s -f -u elastic:$(cat /run/secrets/elastic_password) http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # HotROD demo application for testing
+  hotrod:
+    image: jaegertracing/example-hotrod:1.51
+    container_name: hotrod
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - JAEGER_ENDPOINT=http://jaeger-all-in-one:14268/api/traces
+    networks:
+      - jaeger-network
+    depends_on:
+      - jaeger-all-in-one
+    profiles:
+      - demo
+
+secrets:
+  elastic_password:
+    file: ./secrets/elastic_password.txt
+
+volumes:
+  jaeger_elasticsearch_data:
+    driver: local
+
+networks:
+  jaeger-network:
+    driver: bridge
